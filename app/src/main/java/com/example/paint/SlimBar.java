@@ -67,9 +67,9 @@ public class SlimBar extends View {
         width = right - left;
         height = bottom - top;
         // color box
-        colorBoxSize = height / (colorBoxes.length * 4) + 10;
+        colorBoxSize = height / 2 / (colorBoxes.length * 2) + 10;
         colorBoxMargin = colorBoxSize / colorBoxes.length * 2;
-        colorBoxStartY = height / 2;
+        colorBoxStartY = height / 2 + 50;
         for (int i = 0; i < colorBoxes.length; i++) {
             colorBoxes[i].set(
                     left + width / 2f,
@@ -82,6 +82,8 @@ public class SlimBar extends View {
         customColorStartY = colorBoxStartY - (int) (customColorSelectorSize * 1.4);
         // stroke width
         adjustSizeCenterY = customColorStartY - 120;
+        // bg color
+        setBgStartY = adjustSizeCenterY - width - 70 - 20;
     }
 
     public void setPaintView(PaintView pv) {
@@ -92,7 +94,21 @@ public class SlimBar extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        // draw bg
+        if (selectingCustomColor) {
+            if (customColorIndex == 0) brush.setColor(Color.rgb(200, 0, 0));
+            if (customColorIndex == 1) brush.setColor(Color.rgb(0, 200, 0));
+            if (customColorIndex == 2) brush.setColor(Color.rgb(0, 0, 200));
+            if (customColorIndex == 3) {
+                brush.setColor(Color.argb(customColor[3],
+                        customColor[0], customColor[1], customColor[2]));
+            }
+            canvas.drawRoundRect(0,
+                    (255 - customColor[customColorIndex]) / 255f * height,
+                    width, height, 40, 40, brush);
+        }
         drawStrokeWeightSelection(canvas);
+        drawSetBackground(canvas);
         drawColorSelection(canvas);
         drawColorBox(canvas);
     }
@@ -146,7 +162,7 @@ public class SlimBar extends View {
         brush.setStyle(Paint.Style.FILL);
         brush.setColor(Color.BLACK);
         brush.setAlpha(100);
-        c.drawRoundRect(0,adjustSizeCenterY - 70,width,
+        c.drawRoundRect(0, adjustSizeCenterY - 70, width,
                 adjustSizeCenterY + 70, 0, 50, brush);
         brush.setColor(Color.WHITE);
         c.drawCircle(width / 2f, adjustSizeCenterY, currStrokeWidth / 2f, brush);
@@ -157,29 +173,27 @@ public class SlimBar extends View {
     int customColorSelectorSize;
     int customColorStartY;
     int[] customColor = new int[]{244, 244, 244, 255};
-    int customColorBoxAnimateSize = 0;
     void drawColorSelection(Canvas c) {
         brush.setStyle(Paint.Style.FILL);
-        final float startX = width / 4f; // start of column 2
         if (selectingCustomColor) {
-            if (customColorIndex == 0) brush.setColor(Color.RED);
-            if (customColorIndex == 1) brush.setColor(Color.GREEN);
-            if (customColorIndex == 2) brush.setColor(Color.BLUE);
-            if (customColorIndex == 3)
-                brush.setColor(Color.rgb(customColor[0], customColor[1], customColor[2]));
-            c.drawRect(0, customColorStartY +
-                            ((255 - customColor[customColorIndex]) * customColorSelectorSize / 255f),
-                    startX, customColorStartY + customColorSelectorSize, brush);
-        }
-        for (int i = 0; i < customColor.length; i++) {
-            if (i == 0) brush.setColor(Color.RED);
-            if (i == 1) brush.setColor(Color.GREEN);
-            if (i == 2) brush.setColor(Color.BLUE);
-            if (i == 3) brush.setColor(Color.rgb(customColor[0], customColor[1], customColor[2]));
-            c.drawRect(width - customColor[i] * startX * 3f / 255f,
-                    customColorStartY + i * customColorSelectorSize / 4f,
-                    width,
-                    customColorStartY + (i + 1) * customColorSelectorSize / 4f, brush);
+            brush.setColor(Color.argb(customColor[3],
+                    customColor[0], customColor[1], customColor[2]));
+            c.drawRoundRect(0, customColorStartY,
+                    customColorSelectorSize,
+                    customColorStartY + customColorSelectorSize, 30, 30, brush);
+        } else {
+            for (int i = 0; i < customColor.length; i++) {
+                if (i == 0) brush.setColor(Color.RED);
+                if (i == 1) brush.setColor(Color.GREEN);
+                if (i == 2) brush.setColor(Color.BLUE);
+                if (i == 3)
+                    brush.setColor(Color.argb(customColor[3],
+                            customColor[0], customColor[1], customColor[2]));
+                c.drawArc(0, customColorStartY, width,
+                        customColorStartY + customColorSelectorSize,
+                        90 * (4 - i), 90, true, brush);
+
+            }
         }
     }
 
@@ -191,6 +205,29 @@ public class SlimBar extends View {
         int index = xPos / (deviceW / 4 + 1);
         return index > -1 && index < 4 ? index : -1;
     }
+
+
+    int setBgStartY;
+    /**
+     * click to set back background to color[currentColorIndex]
+     */
+    void drawSetBackground(Canvas c) {
+        brush.setStyle(Paint.Style.FILL_AND_STROKE);
+        brush.setColor(Color.BLACK);
+        c.drawRoundRect(0, setBgStartY, width, setBgStartY + width, 40, 40, brush);
+        brush.setTextSize(width / 2f);
+        brush.setTextAlign(Paint.Align.CENTER);
+        brush.setColor(Color.WHITE);
+        c.drawText("B", width / 3f * 1.2f, setBgStartY + width / 1.8f, brush);
+        c.drawText("G", width / 3f * 1.7f, setBgStartY + width / 1.4f, brush);
+    }
+
+    int clickSetBackground(int yPos) {
+        if (yPos < setBgStartY || yPos > setBgStartY + width) return -1;
+        PV.setBackground(colors[currColorIndex]);
+        return 1;
+    }
+
 
 
     // state machine
@@ -287,6 +324,8 @@ public class SlimBar extends View {
                 if (startY - e.getY() < 0) PV.undo();
                 else PV.redo();
                 invalidate();
+            } else {
+                clickSetBackground((int) e.getY());
             }
         }
     }

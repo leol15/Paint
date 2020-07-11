@@ -11,7 +11,6 @@ import android.graphics.PorterDuff;
 import android.view.MotionEvent;
 import android.view.View;
 
-import androidx.core.view.MotionEventCompat;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -24,6 +23,7 @@ public class PaintView extends View {
     int viewWidth;
     int viewHeight;
     int CURRENT_COLOR;
+    int CURRENT_BG_COLOR = Color.rgb(50, 50, 50);
     float CURRENT_WIDTH = 20;
 
     List<PathWarp> paths;
@@ -47,6 +47,17 @@ public class PaintView extends View {
 
         currentLines = new HashMap<>();
         lastPos = new HashMap<>();
+
+        this.addOnLayoutChangeListener(new OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View view, int i, int i1, int i2, int i3, int i4, int i5, int i6, int i7) {
+                viewWidth = getWidth();
+                viewHeight = getHeight();
+                mBitmap = Bitmap.createBitmap(viewWidth, viewHeight, Bitmap.Config.ARGB_8888);
+                mBMCanvas = new Canvas(mBitmap);
+                redrawBitmap();
+            }
+        });
     }
 
     @Override
@@ -60,6 +71,7 @@ public class PaintView extends View {
         }
     }
 
+
     Paint p;
     @Override
     protected void onDraw(Canvas canvas) {
@@ -72,6 +84,7 @@ public class PaintView extends View {
                 canvas.drawPath(pw.P, p);
             }
         }
+
     }
 
 
@@ -88,7 +101,7 @@ public class PaintView extends View {
             case MotionEvent.ACTION_POINTER_DOWN:
             case MotionEvent.ACTION_DOWN:
                 if (!currentLines.containsKey(id)) {
-                    float[] pos = new float[]{e.getX(index), e.getY(index), e.getX(index), e.getY(index)};
+                    float[] pos = new float[]{e.getX(index), e.getY(index)};
                     Path newLine = new Path();
                     currentLines.put(id, new PathWarp(newLine, CURRENT_COLOR, CURRENT_WIDTH));
                     lastPos.put(id, pos);
@@ -102,17 +115,13 @@ public class PaintView extends View {
                 float nx, ny;
                 for (int id_key: currentLines.keySet()) {
                     for (int i = 0; i < size; i++) {
-                        nx = e.getHistoricalX(e.findPointerIndex(id_key), i);
-                        ny = e.getHistoricalY(e.findPointerIndex(id_key), i);
-                        float[] lastPositions = lastPos.get(id_key);
-                        currentLines.get(id_key).P.quadTo(
-                                lastPositions[2] + (lastPositions[2] - lastPositions[0]) / 6,
-                                lastPositions[3] + (lastPositions[3] - lastPositions[1]) / 6,
-                                nx, ny);
-                        lastPositions[0] = lastPositions[2];
-                        lastPositions[1] = lastPositions[3];
-                        lastPositions[2] = nx;
-                        lastPositions[3] = ny;
+                        float[] lastP = lastPos.get(id_key);
+                        nx = (e.getHistoricalX(e.findPointerIndex(id_key), i));
+                        ny = (e.getHistoricalY(e.findPointerIndex(id_key), i));
+                        currentLines.get(id_key).P.quadTo(lastP[0], lastP[1],
+                                (nx + lastP[0]) / 2, (ny + lastP[1]) / 2);
+                        lastP[0] = nx;
+                        lastP[1] = ny;
                     }
                 }
                 invalidate();
@@ -124,8 +133,8 @@ public class PaintView extends View {
                 lastPos.remove(id);
                 PathWarp pw = paths.get(paths.size() - 1);
                 p.setColor(pw.Color);
-                p.setStrokeWidth(paths.get(paths.size() - 1).Width);
-                mBMCanvas.drawPath(paths.get(paths.size() - 1).P, p);
+                p.setStrokeWidth(pw.Width);
+                mBMCanvas.drawPath(pw.P, p);
                 isDrawing = currentLines.size() != 0;
                 undoStack.clear();
             default:
@@ -151,7 +160,17 @@ public class PaintView extends View {
         if (isDrawing) return;
         paths.clear();
         undoStack.clear();
-        mBMCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+        redrawBitmap();
+        invalidate();
+    }
+
+    void setBackground(int color) {
+        if (color == CURRENT_BG_COLOR) {
+            CURRENT_BG_COLOR = Color.TRANSPARENT;
+        } else {
+            CURRENT_BG_COLOR = color;
+        }
+        redrawBitmap();
         invalidate();
     }
 
@@ -162,12 +181,7 @@ public class PaintView extends View {
     void undo() {
         if (paths.size() > 0) {
             undoStack.push(paths.remove(paths.size() - 1));
-            mBMCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
-            for (PathWarp pw : paths) {
-                p.setColor(pw.Color);
-                p.setStrokeWidth(pw.Width);
-                mBMCanvas.drawPath(pw.P, p);
-            }
+            redrawBitmap();
             invalidate();
         }
     }
@@ -175,13 +189,18 @@ public class PaintView extends View {
     void redo() {
         if (undoStack.size() > 0) {
             paths.add(undoStack.pop());
-            mBMCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
-            for (PathWarp pw : paths) {
-                p.setColor(pw.Color);
-                p.setStrokeWidth(pw.Width);
-                mBMCanvas.drawPath(pw.P, p);
-            }
+            redrawBitmap();
             invalidate();
+        }
+    }
+
+    void redrawBitmap() {
+        mBMCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+        mBMCanvas.drawColor(CURRENT_BG_COLOR);
+        for (PathWarp pw : paths) {
+            p.setColor(pw.Color);
+            p.setStrokeWidth(pw.Width);
+            mBMCanvas.drawPath(pw.P, p);
         }
     }
 }
